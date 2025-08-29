@@ -1,0 +1,73 @@
+# .github/workflows/TrackChanges.yml
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature           # exactly 'feature'
+      - 'feature/**'      # any 'feature/...'
+  pull_request:
+    types: [opened, synchronize, closed]
+    branches:
+      - main              # base branch filter (PRs targeting main)
+  pull_request_review:
+    types: [submitted]
+    # Optional: same base-branch filter (reviews only exist on PRs)
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Debug context (enable with ACTIONS_STEP_DEBUG=true)
+        if: ${{ runner.debug == '1' }}
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "ref=${{ github.ref }}"
+          echo "ref_name=${{ github.ref_name }}"
+          echo "sha=${{ github.sha }}"
+          echo "actor=${{ github.actor }}"
+          echo "action=${{ github.event.action }}"
+          echo "base_ref=${{ github.base_ref }}"
+          echo "head_ref=${{ github.head_ref }}"
+          echo "pr_number=${{ github.event.pull_request.number || '' }}"
+
+      # --- Pushes ---
+      - name: Push to main
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: echo "Push to main by ${{ github.actor }} (sha ${{ github.sha }})"
+
+      - name: Push to feature (exact branch)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature' }}
+        run: echo "Push to 'feature' by ${{ github.actor }} (sha ${{ github.sha }})"
+
+      - name: Push to feature/*
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/') }}
+        run: echo "Push to feature branch '${{ github.ref_name }}' by ${{ github.actor }} (sha ${{ github.sha }})"
+
+      # --- Pull Requests (base = main) ---
+      - name: PR opened
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
+        run: echo "PR #${{ github.event.number }} OPENED by ${{ github.actor }} (${{ github.head_ref }} -> ${{ github.base_ref }})"
+
+      - name: PR synchronized (new commits)
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
+        run: echo "PR #${{ github.event.number }} SYNCHRONIZE by ${{ github.actor }}; latest sha ${{ github.sha }}"
+
+      - name: PR closed without merge
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == false }}
+        run: echo "PR #${{ github.event.number }} CLOSED (no merge) by ${{ github.actor }}"
+
+      - name: PR merged to base
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+        run: echo "PR #${{ github.event.number }} MERGED by ${{ github.actor }} into ${{ github.base_ref }}"
+
+      # --- Reviews ---
+      - name: Review submitted
+        if: ${{ github.event_name == 'pull_request_review' && github.event.action == 'submitted' }}
+        run: echo "REVIEW SUBMITTED by ${{ github.actor }} on PR #${{ github.event.pull_request.number }} (state: ${{ github.event.review.state }})"
