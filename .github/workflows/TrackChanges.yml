@@ -1,31 +1,30 @@
-# This is a basic workflow to help you get started with Actions
-
+# .github/workflows/TrackChanges.yml
 name: CI
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main", "feature*" ]
+    branches:
+      - main
+      - feature           # exactly 'feature'
+      - 'feature/**'      # any 'feature/...'
   pull_request:
-    branches: [ "main", "feature*" ]
     types: [opened, synchronize, closed]
+    branches:
+      - main              # base branch filter (PRs targeting main)
   pull_request_review:
-    branches: [ "main", "feature*" ]
     types: [submitted]
-
-  # Allows you to run this workflow manually from the Actions tab
+    # Optional: same base-branch filter (reviews only exist on PRs)
+    branches:
+      - main
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   echo:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Debug context (only prints if runner debug is enabled)
-      - name: Debug context
+      - name: Debug context (enable with ACTIONS_STEP_DEBUG=true)
         if: ${{ runner.debug == '1' }}
         run: |
           echo "event_name=${{ github.event_name }}"
@@ -40,10 +39,36 @@ jobs:
 
       # --- Pushes ---
       - name: Push to main
-        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/main') }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: echo "Push to main by ${{ github.actor }} (sha ${{ github.sha }})"
 
-      - name: Push to feature*
+      - name: Push to feature (exact branch)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature' }}
+        run: echo "Push to 'feature' by ${{ github.actor }} (sha ${{ github.sha }})"
+
+      - name: Push to feature/*
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/') }}
         run: echo "Push to feature branch '${{ github.ref_name }}' by ${{ github.actor }} (sha ${{ github.sha }})"
-          
+
+      # --- Pull Requests (base = main) ---
+      - name: PR opened
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
+        run: echo "PR #${{ github.event.number }} OPENED by ${{ github.actor }} (${{ github.head_ref }} -> ${{ github.base_ref }})"
+
+      - name: PR synchronized (new commits)
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
+        run: echo "PR #${{ github.event.number }} SYNCHRONIZE by ${{ github.actor }}; latest sha ${{ github.sha }}"
+
+      - name: PR closed without merge
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == false }}
+        run: echo "PR #${{ github.event.number }} CLOSED (no merge) by ${{ github.actor }}"
+
+      - name: PR merged to base
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+        run: echo "PR #${{ github.event.number }} MERGED by ${{ github.actor }} into ${{ github.base_ref }}"
+
+      # --- Reviews ---
+      - name: Review submitted
+        if: ${{ github.event_name == 'pull_request_review' && github.event.action == 'submitted' }}
+        run: echo "REVIEW SUBMITTED by ${{ github.actor }} on PR #${{ github.event.pull_request.number }} (state: ${{ github.event.review.state }})"
+
